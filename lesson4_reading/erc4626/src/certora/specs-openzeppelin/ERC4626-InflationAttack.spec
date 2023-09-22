@@ -84,10 +84,6 @@ rule vulnerableToInflationAttack(address attacker, address victim, address depos
     uint8 ERC4626decimals = decimals();
     uint8 ERC20decimals = __ERC20.decimals();
 
-
-    require(ERC4626decimals == 10);
-    require(ERC20decimals == 10);
-    
     require(attacker != currentContract);
     require(attacker != __ERC20);
     require(attacker != 0);
