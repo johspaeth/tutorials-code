@@ -72,8 +72,15 @@ rule redeemMustDecreaseTotalAssets(uint256 shares, address receiver, address own
     assert totalAssetsAfter <= totalAssetsBefore, "Total assets must decrease when redeem is called."; 
 }
 
+/**
+Checks that a user gains assets in the following process
+1. User mints X shares, (corresponding to Y assets)
+2. Underlying vault increases total value
+3. User redeemed X minted shares again and receives Z assets in return.
 
-rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
+This rule derives upper and lower limits to the newly gained assets Z. 
+*/
+rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperAndLowerLimits(){
     env e;
     uint256 mintedShares;
     uint256 newAssets;
@@ -94,7 +101,7 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     //Mint some new shares
     uint256 mintedAssets = mint(e, mintedShares, user);
 
-    //underlying vault increases value.
+    //underlying vault increases value
     __ERC20.mint(e, currentContract, newAssets);
 
     uint256 totalSupplyAfter = totalSupply();
@@ -107,49 +114,67 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     Explanation of the assert below. 
     Inequalities baisc idea: (a/c <= b/d) => (a/c <= (a + b)/(c + d) <= b/d)
 
+    Given.... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore <= totalAssetsAfter / totalSupplyAfter <= (mintedAssets + newAssets) / mintedShares 
+    Given.... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore >= totalAssetsAfter / totalSupplyAfter >= (mintedAssets + newAssets) / mintedShares 
 
-    //TODO: Do we need to factor in the offsets also in the formular tAB / TSB ? 
-    //TODO: 2 Formulars below are NOT adopted to Open Zeppenlin
-    Given... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore <= totalAssetsAfter / totalSupplyAfter <= (mintedAssets + newAssets) / mintedShares 
-    Given... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore >= totalAssetsAfter / totalSupplyAfter >= (mintedAssets + newAssets) / mintedShares 
-    
-    Now it is mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter * 10**decimals()) >= floor(mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter + 10**decimals()) [= redeemedAssets] > mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter + 10 ** decimals()) - 1
-    
-    Sidenote in the formular below, one can replace tAA / tSA by (tAB + mA + nA) / (tSB + mS)
-    Let tAB := totalAssetsBefore
-    Let tAA := totalAssetsAfter
+    Now it should be redeemedAssets = floor(mintedShares * totalAssetsAfter / totalSupplyAfter) that can be relaxed to
+    Given.... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore <= redeemedAssets <= (mintedAssets + newAssets)
+    Given.... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore >= redeemedAssets >= (mintedAssets + newAssets) 
+
+
+    Now it is mintedShares * totalAssetsAfter / totalSupplyAfter >= floor(mintedShares * totalAssetsAfter / totalSupplyAfter) [= redeemedAssets] > mintedShares * totalAssetsAfter / totalSupplyAfter - 1
+
+    Note in the formular below, one can replace tAA / tSA by (tAB + mA + nA) / (tSB + mS)
+    Let tAB := totalAssetBefore
+    Let tAA := totalAssetAfter
     Let tSB := totalSupplyBefore
     Let tSA := totalSupplyAfter
     Let mS := mintedShares
     Let mA := mintedAssets
     Let nA := newAssets
-    Let d := decimals
     Then it is
+
     (1) tAB / tSB <= (mA + nA) / mS => tAB / tSB <= tAA / tSA 
     (2): tAB / tSB <= (mA + nA) / mS => tAA / tSA <= (mA + nA) / mS 
     (3): tAB / tSB >= (mA + nA) / mS => tAB / tSB >= tAA / tSA 
     (4): tAB / tSB >= (mA + nA) / mS => tAA / tSA >= (mA + nA) / mS 
-    we also know that (5) redeemedAssets <= mS * (tAA + 1) / (tSA + 10**d)  and (6) mS * (tAA + 1) / (tSA + 10 ** d) - 1 < redeemedAssets
+    we also know that (5) redeemedAssets <= mS * tAA / tSA  and (6) mS * tAA / tSA - 1 < redeemedAssets
 
-
-    (6) is equivalent to
-    (6a) tAA < ((redeemedAssets + 1) * (tSA + 10 ** d)) / mS - 1
-    Combining (1) and (6a) it is
-    (7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < (((redeemedAssets + 1)  * (tSA + 10 ** d)) / mS - 1) / tSA
-    or (without division)
-    (7a) tAB * mS  <= (mA + nA) * tSB => mS * tAB * tSA + mS * tSB < ((redeemedAssets + 1)  * (tSA + 10 ** d)) * tSB
+    Combining (1) and (6) it is
+    (7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < (redeemedAssets + 1) / mS
+    Combining (2) and (5) it is
+    (8) tAB / tSB <= (mA + nA) / mS => redeemedAssets / mS <= (mA + nA) / mS 
+    Combining (3) and (5) it is
+    (9) tAB / tSB >= (mA + nA) / mS => tAB / tSB >= redeemedAssets / mS 
+    Combining (4) and (6) it is
+    (10) tAB / tSB >= (mA + nA) / mS => (redeemedAssets + 1) / mS > (mA + nA) / mS 
     */
-    
-
-    //Sanity asserts to ensure the reasoning is correct (commented in to debug timeout issue)
+    //Sanity asserts to ensure the reasoning is correct
     //assert to_mathint(totalAssetsAfter) == totalAssetsBefore + mintedAssets + newAssets;
     //assert to_mathint(totalSupplyAfter) == totalSupplyBefore + mintedShares;
 
-    //Implements (7a)
-    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => mintedShares * totalAssetsBefore * totalSupplyAfter + mintedShares * totalSupplyBefore < (redeemedAssets + 1) * (totalSupplyAfter + 1 ) * totalSupplyBefore, "Checking lower bound in case of increase of ratio";
-
+    //Implements (7) without division to avoid rounding.
+    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares < to_mathint(redeemedAssets + 1) * totalSupplyBefore, "Checking lower bound in case of increase of ratio"; //Causes timeout
+    //Implements (8) without division to avoid rounding.
+    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets) <= (mintedAssets + newAssets), "Checking upper bound in case of increase of ratio"; //Does not causes timeout with the correct config. https://prover.certora.com/output/53900/1c3ce153358048709a259f7ce383019c/?anonymousKey=ffd32ec358795cb4c1a1d006a98993335151ee23
+    //Implements (9) without division to avoid rounding.
+    assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares >= redeemedAssets * totalSupplyBefore , "Checking upper bound in case of decrease of ratio"; //Not a cause of the timeout, as identified by "multi_assert_check": true
+    //Implements (10) without division to avoid rounding.
+    assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets + 1) > (mintedAssets + newAssets), "Checking lower bound in case of decrease of ratio"; //Not a cause of the timeout, as identified by "multi_assert_check": true
 }
 
+
+/**
+Checks that a user gains assets in the following process
+1. User mints X shares, (corresponding to Y assets)
+2. Underlying vault increases total value
+3. User redeemed X minted shares again. 
+
+The received assets in step 3 must be larger than Y (in the assert there is an offset +1 as of rounding) as the vaults total assets increases. 
+
+
+property derived from table in https://github.com/transmissions11/solmate/blob/0384dbaaa4fcb5715738a9254a7c0a4cb62cf458/src/test/ERC4626.t.sol#L117
+*/
 rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
     env e;
     uint256 mintedShares;
@@ -158,15 +183,13 @@ rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
     require(e.msg.sender == user);
     require(e.msg.sender != currentContract);
     require(newAssets > 0);
-
     safeAssumptions();
-
     //Mint some new shares
     uint256 mintedAssets = mint(e, mintedShares, user);
 
-    //underlying vault increases value.
+    //underlying vault increases value
     __ERC20.mint(e, currentContract, newAssets);
-    
+
     //Redeem mintedShares again
     uint256 redeemedAssets = redeem(e, mintedShares, user, user);
 

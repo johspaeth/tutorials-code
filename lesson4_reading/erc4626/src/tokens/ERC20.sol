@@ -88,9 +88,9 @@ contract ERC20 {
         return true;
     }
 
-    // INTERNAL MINT/BURN LOGIC (made public for rule writing purposes.)
+    // INTERNAL MINT/BURN LOGIC
 
-    function _mint(address to, uint256 amount) public virtual {
+    function _mint(address to, uint256 amount) internal virtual {
         totalSupply += amount;
 
         // Cannot overflow because the sum of all user

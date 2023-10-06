@@ -67,9 +67,14 @@ rule redeemMustDecreaseTotalAssets(uint256 shares, address receiver, address own
 }
 
 /**
-Rule currently times out. 
+Checks that a user gains assets in the following process
+1. User mints X shares, (corresponding to Y assets)
+2. Underlying vault increases total value
+3. User redeemed X minted shares again and receives Z assets in return.
+
+This rule derives upper and lower limits to the newly gained assets Z. 
 */
-rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
+rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperAndLowerLimits(){
     env e;
     uint256 mintedShares;
     uint256 newAssets;
@@ -90,8 +95,8 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     //Mint some new shares
     uint256 mintedAssets = mint(e, mintedShares, user);
 
-    //underlying vault increases value.
-    __ERC20._mint(e, currentContract, newAssets);
+    //underlying vault increases value, models a transfer from 0 to the currenctContract, essentially a call to "mint".
+    __ERC20.transferFrom(e, 0, currentContract, newAssets);
 
     uint256 totalSupplyAfter = totalSupply();
     uint256 totalAssetsAfter = totalAssets();
@@ -110,7 +115,7 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     Given.... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore <= redeemedAssets <= (mintedAssets + newAssets)
     Given.... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore >= redeemedAssets >= (mintedAssets + newAssets) 
 
-    
+
     Now it is mintedShares * totalAssetsAfter / totalSupplyAfter >= floor(mintedShares * totalAssetsAfter / totalSupplyAfter) [= redeemedAssets] > mintedShares * totalAssetsAfter / totalSupplyAfter - 1
 
     Note in the formular below, one can replace tAA / tSA by (tAB + mA + nA) / (tSB + mS)
@@ -122,7 +127,7 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     Let mA := mintedAssets
     Let nA := newAssets
     Then it is
-    
+
     (1) tAB / tSB <= (mA + nA) / mS => tAB / tSB <= tAA / tSA 
     (2): tAB / tSB <= (mA + nA) / mS => tAA / tSA <= (mA + nA) / mS 
     (3): tAB / tSB >= (mA + nA) / mS => tAB / tSB >= tAA / tSA 
@@ -138,7 +143,6 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     Combining (4) and (6) it is
     (10) tAB / tSB >= (mA + nA) / mS => (redeemedAssets + 1) / mS > (mA + nA) / mS 
     */
-
     //Sanity asserts to ensure the reasoning is correct
     //assert to_mathint(totalAssetsAfter) == totalAssetsBefore + mintedAssets + newAssets;
     //assert to_mathint(totalSupplyAfter) == totalSupplyBefore + mintedShares;
@@ -154,77 +158,17 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
 }
 
 
+/**
+Checks that a user gains assets in the following process
+1. User mints X shares, (corresponding to Y assets)
+2. Underlying vault increases total value
+3. User redeemed X minted shares again. 
+
+The received assets in step 3 must be larger than Y (in the assert there is an offset +1 as of rounding) as the vaults total assets increases. 
 
 
-rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit_FixSupplyAndAssetsToZero(){
-    env e;
-    uint256 mintedShares;
-    uint256 newAssets;
-    address user;
-    require(e.msg.sender == user);
-    require(newAssets > 0);
-    require(e.msg.sender != currentContract);
-
-    safeAssumptions();
-
-    uint256 totalSupplyBefore = totalSupply();
-    uint256 totalAssetsBefore = totalAssets();
-    require totalSupplyBefore == 0;
-    require totalAssetsBefore == 0;
-
-    //Mint some new shares
-    uint256 mintedAssets = mint(e, mintedShares, user);
-
-    //underlying vault increases value.
-    __ERC20._mint(e, currentContract, newAssets);
-
-    uint256 totalSupplyAfter = totalSupply();
-    uint256 totalAssetsAfter = totalAssets();
-
-    //Redeem mintedShares again
-    uint256 redeemedAssets = redeem(e, mintedShares, user, user);
-
-   assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets) <= (mintedAssets + newAssets);
-
-//That's just wrong....
-    assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares >= redeemedAssets * totalSupplyBefore;
- 
-}
-
-
-rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit_FixSupplyAndAssetsToConstantValue(){
-    env e;
-    uint256 mintedShares;
-    uint256 newAssets;
-    address user;
-    require(e.msg.sender == user);
-    require(newAssets > 0);
-    require(e.msg.sender != currentContract);
-
-    safeAssumptions();
-
-    uint256 totalSupplyBefore = totalSupply();
-    uint256 totalAssetsBefore = totalAssets();
-    require totalSupplyBefore == 100;
-    require totalAssetsBefore == 200;
-
-    //Mint some new shares
-    uint256 mintedAssets = mint(e, mintedShares, user);
-
-    //underlying vault increases value.
-    __ERC20._mint(e, currentContract, newAssets);
-
-    uint256 totalSupplyAfter = totalSupply();
-    uint256 totalAssetsAfter = totalAssets();
-
-    //Redeem mintedShares again
-    uint256 redeemedAssets = redeem(e, mintedShares, user, user);
-
-   assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets) <= (mintedAssets + newAssets);
-
-    assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares >= redeemedAssets * totalSupplyBefore;
- 
-}
+property derived from table in https://github.com/transmissions11/solmate/blob/0384dbaaa4fcb5715738a9254a7c0a4cb62cf458/src/test/ERC4626.t.sol#L117
+*/
 rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
     env e;
     uint256 mintedShares;
@@ -233,15 +177,13 @@ rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
     require(e.msg.sender == user);
     require(e.msg.sender != currentContract);
     require(newAssets > 0);
-
     safeAssumptions();
-
     //Mint some new shares
     uint256 mintedAssets = mint(e, mintedShares, user);
 
-    //underlying vault increases value.
-    __ERC20._mint(e, currentContract, newAssets);
-    
+    //underlying vault increases value, models a transfer from 0 to the currenctContract, essentially a call to "mint".
+    __ERC20.transferFrom(e, 0, currentContract, newAssets);
+
     //Redeem mintedShares again
     uint256 redeemedAssets = redeem(e, mintedShares, user, user);
 
