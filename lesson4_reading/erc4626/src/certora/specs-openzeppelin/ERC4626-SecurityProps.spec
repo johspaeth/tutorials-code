@@ -87,10 +87,9 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     uint256 totalSupplyBefore = totalSupply();
     uint256 totalAssetsBefore = totalAssets();
 
-    //Otherwise, inequalities do not hold as of division by zero. TODO: think of Upper Bound in case totalSupplyBefore = 0;
+    //Otherwise, inequalities below do not hold as of division by zero. TODO: think of Upper Bound in case totalSupplyBefore = 0;
     require mintedShares > 0;
     require totalSupplyBefore > 0;
-
 
     //Mint some new shares
     uint256 mintedAssets = mint(e, mintedShares, user);
@@ -104,50 +103,50 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     //Redeem mintedShares again
     uint256 redeemedAssets = redeem(e, mintedShares, user, user);
 
-    //Redeemed assets should have increased. TODO can we be more specific?
-    //assert to_mathint(mintedAssets) <= redeemedAssets + 1, "Redeemed assets must increase."; 
+    /**
+    Inequalities baisc idea: (a/c <= b/d) => (a/c <= (a + b)/(c + d) <= b/d)
 
-    //From.... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore <= totalAssetsAfter / totalSupplyAfter <= (mintedAssets + newAssets) / mintedShares 
-    //From.... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore >= totalAssetsAfter / totalSupplyAfter >= (mintedAssets + newAssets) / mintedShares 
 
-    //Now it should be redeemedAssets = floor(mintedShares * totalAssetsAfter / totalSupplyAfter) that can be relaxed to
-    //From.... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore <= redeemedAssets <= (mintedAssets + newAssets)
-    //From.... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore >= redeemedAssets >= (mintedAssets + newAssets) 
-
+    //TODO: Do we need to factor in the offsets also in the formular tAB / TSB ? 
+    //TODO: 2 Formulars below are NOT adopted to Open Zeppenlin
+    Given... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore <= totalAssetsAfter / totalSupplyAfter <= (mintedAssets + newAssets) / mintedShares 
+    Given... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore >= totalAssetsAfter / totalSupplyAfter >= (mintedAssets + newAssets) / mintedShares 
     
-    //Now it is mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter * 10**decimals()) >= floor(mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter + 10**decimals()) [= redeemedAssets] > mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter + 10 ** decimals()) - 1
+    Now it is mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter * 10**decimals()) >= floor(mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter + 10**decimals()) [= redeemedAssets] > mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter + 10 ** decimals()) - 1
     
-    //Note in the formular below, one can replace tAA / tSA by (tAB + mA + nA) / (tSB + mS)
-    //Let tAB := totalAssetsBefore
-    //Let tAA := totalAssetsAfter
-    //Let tSB := totalSupplyBefore
-    //Let tSA := totalSupplyAfter
-    //Let mS := mintedShares
-    //Let mA := mintedAssets
-    //Let nA := newAssets
-    //Let d := decimals
-    //Then it is
-    //(1) tAB / tSB <= (mA + nA) / mS => tAB / tSB <= tAA / tSA 
-    //(2): tAB / tSB <= (mA + nA) / mS => tAA / tSA <= (mA + nA) / mS 
-    //(3): tAB / tSB >= (mA + nA) / mS => tAB / tSB >= tAA / tSA 
-    //(4): tAB / tSB >= (mA + nA) / mS => tAA / tSA >= (mA + nA) / mS 
-    //we also know that (5) redeemedAssets <= mS * (tAA + 1) / (tSA + 10**d)  and (6) mS * (tAA + 1) / (tSA + 10 ** d) - 1 < redeemedAssets
+    Sidenote in the formular below, one can replace tAA / tSA by (tAB + mA + nA) / (tSB + mS)
+    Let tAB := totalAssetsBefore
+    Let tAA := totalAssetsAfter
+    Let tSB := totalSupplyBefore
+    Let tSA := totalSupplyAfter
+    Let mS := mintedShares
+    Let mA := mintedAssets
+    Let nA := newAssets
+    Let d := decimals
+    Then it is
+    (1) tAB / tSB <= (mA + nA) / mS => tAB / tSB <= tAA / tSA 
+    (2): tAB / tSB <= (mA + nA) / mS => tAA / tSA <= (mA + nA) / mS 
+    (3): tAB / tSB >= (mA + nA) / mS => tAB / tSB >= tAA / tSA 
+    (4): tAB / tSB >= (mA + nA) / mS => tAA / tSA >= (mA + nA) / mS 
+    we also know that (5) redeemedAssets <= mS * (tAA + 1) / (tSA + 10**d)  and (6) mS * (tAA + 1) / (tSA + 10 ** d) - 1 < redeemedAssets
 
 
-    //(6) is equivalent to
-    //(6a) tAA < ((redeemedAssets + 1) * (tSA + 10 ** d)) / mS - 1
-    //Combining (1) and (6a) it is
-    //(7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < (((redeemedAssets + 1)  * (tSA + 10 ** d)) / mS - 1) / tSA
-    //or (without division)
-    //(7a) tAB * mS  <= (mA + nA) * tSB => mS * tAB * tSA + mS * tSB < ((redeemedAssets + 1)  * (tSA + 10 ** d)) * tSB
+    (6) is equivalent to
+    (6a) tAA < ((redeemedAssets + 1) * (tSA + 10 ** d)) / mS - 1
+    Combining (1) and (6a) it is
+    (7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < (((redeemedAssets + 1)  * (tSA + 10 ** d)) / mS - 1) / tSA
+    or (without division)
+    (7a) tAB * mS  <= (mA + nA) * tSB => mS * tAB * tSA + mS * tSB < ((redeemedAssets + 1)  * (tSA + 10 ** d)) * tSB
+    */
     
 
-    //Sanity asserts to ensure the reasoning is correct
+    //Sanity asserts to ensure the reasoning is correct (commented in to debug timeout issue)
     //assert to_mathint(totalAssetsAfter) == totalAssetsBefore + mintedAssets + newAssets;
     //assert to_mathint(totalSupplyAfter) == totalSupplyBefore + mintedShares;
 
     //Implements (7a)
-    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => mintedShares * totalAssetsBefore * totalSupplyAfter + mintedShares * totalSupplyBefore < (redeemedAssets + 1) * (totalSupplyAfter + 1) * totalSupplyBefore, "Checking lower bound in case of increase of ratio";
+    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => mintedShares * totalAssetsBefore * totalSupplyAfter + mintedShares * totalSupplyBefore < (redeemedAssets + 1) * (totalSupplyAfter + 1 ) * totalSupplyBefore, "Checking lower bound in case of increase of ratio";
+
 }
 
 rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
