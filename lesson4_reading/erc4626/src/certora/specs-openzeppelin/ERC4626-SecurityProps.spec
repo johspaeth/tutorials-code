@@ -8,6 +8,8 @@ use invariant sumOfBalancesEqualsTotalSupplyERC4626;
 use invariant sumOfBalancesEqualsTotalSupplyERC20;
 use invariant singleUserBalanceSmallerThanTotalSupplyERC20;
 use invariant singleUserBalanceSmallerThanTotalSupplyERC4626;
+use invariant mirrorIsCorrectERC20;
+use invariant mirrorIsCorrectERC4626;
 
 
 methods {
@@ -16,6 +18,12 @@ methods {
     function decimals() external returns uint8 envfree;
     function __ERC20.decimals() external returns uint8 envfree;
     function totalSupply() external returns uint256 envfree;
+
+    function Math.mulDiv(uint256 x, uint256 y, uint256 denominator) internal returns uint256 => mulDivSummary(x,y,denominator);
+} 
+
+function mulDivSummary(uint256 x, uint256 y, uint256 denominator) returns uint256 {
+    return require_uint256(x*y/denominator);
 }
 
 
@@ -64,6 +72,113 @@ rule redeemMustDecreaseTotalAssets(uint256 shares, address receiver, address own
     assert totalAssetsAfter <= totalAssetsBefore, "Total assets must decrease when redeem is called."; 
 }
 
+
+rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
+    env e;
+    uint256 mintedShares;
+    uint256 newAssets;
+    address user;
+    require(e.msg.sender == user);
+    require(newAssets > 0);
+    require(e.msg.sender != currentContract);
+
+    safeAssumptions();
+
+    uint256 totalSupplyBefore = totalSupply();
+    uint256 totalAssetsBefore = totalAssets();
+
+    //Otherwise, inequalities do not hold as of division by zero. TODO: think of Upper Bound in case totalSupplyBefore = 0;
+    require mintedShares > 0;
+    require totalSupplyBefore > 0;
+
+
+    //Mint some new shares
+    uint256 mintedAssets = mint(e, mintedShares, user);
+
+    //underlying vault increases value.
+    __ERC20.mint(e, currentContract, newAssets);
+
+    uint256 totalSupplyAfter = totalSupply();
+    uint256 totalAssetsAfter = totalAssets();
+
+    //Redeem mintedShares again
+    uint256 redeemedAssets = redeem(e, mintedShares, user, user);
+
+    //Redeemed assets should have increased. TODO can we be more specific?
+    //assert to_mathint(mintedAssets) <= redeemedAssets + 1, "Redeemed assets must increase."; 
+
+    //From.... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore <= totalAssetsAfter / totalSupplyAfter <= (mintedAssets + newAssets) / mintedShares 
+    //From.... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... totalAssetsBefore / totalSupplyBefore >= totalAssetsAfter / totalSupplyAfter >= (mintedAssets + newAssets) / mintedShares 
+
+    //Now it should be redeemedAssets = floor(mintedShares * totalAssetsAfter / totalSupplyAfter) that can be relaxed to
+    //From.... totalAssetsBefore / totalSupplyBefore <= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore <= redeemedAssets <= (mintedAssets + newAssets)
+    //From.... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore >= redeemedAssets >= (mintedAssets + newAssets) 
+
+    
+    //Now it is mintedShares * totalAssetsAfter / totalSupplyAfter >= floor(mintedShares * totalAssetsAfter / totalSupplyAfter) [= redeemedAssets] > mintedShares * totalAssetsAfter / totalSupplyAfter - 1
+    
+    //Note in the formular below, one can replace tAA / tSA by (tAB + mA + nA) / (tSB + mS)
+    //Let tAB := totalAssetBefore
+    //Let tAA := totalAssetAfter
+    //Let tSB := totalSupplyABefore
+    //Let tSA := totalSupplayAfter
+    //Let mS := mintedShares
+    //Let mA := mintedAssets
+    //Let nA := newAssets
+    //Then it is
+    //(1) tAB / tSB <= (mA + nA) / mS => tAB / tSB <= tAA / tSA 
+    //(2): tAB / tSB <= (mA + nA) / mS => tAA / tSA <= (mA + nA) / mS 
+    //(3): tAB / tSB >= (mA + nA) / mS => tAB / tSB >= tAA / tSA 
+    //(4): tAB / tSB >= (mA + nA) / mS => tAA / tSA >= (mA + nA) / mS 
+    //we also know that (5) redeemedAssets <= mS * tAA / tSA  and (6) mS * tAA / tSA - 1 < redeemedAssets
+
+    //Combining (1) and (6) it is
+    //(7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < (redeemedAssets + 1) / mS
+    //Combining (2) and (5) it is
+    //(8) tAB / tSB <= (mA + nA) / mS => redeemedAssets / mS <= (mA + nA) / mS 
+    //Combining (3) and (5) it is
+    //(9) tAB / tSB >= (mA + nA) / mS => tAB / tSB >= redeemedAssets / mS 
+    //Combining (4) and (6) it is
+    //(10) tAB / tSB >= (mA + nA) / mS => (redeemedAssets + 1) / mS > (mA + nA) / mS 
+
+
+    //Sanity asserts to ensure the reasoning is correct
+    //assert to_mathint(totalAssetsAfter) == totalAssetsBefore + mintedAssets + newAssets;
+    //assert to_mathint(totalSupplyAfter) == totalSupplyBefore + mintedShares;
+
+    //Implements (7) without division to avoid rounding.
+    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares < to_mathint(redeemedAssets + 1) * totalSupplyBefore, "Checking lower bound in case of increase of ratio";
+    //Implements (8) without division to avoid rounding.
+    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets) <= (mintedAssets + newAssets), "Checking upper bound in case of increase of ratio";
+    //Implements (9) without division to avoid rounding.
+    assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares >= redeemedAssets * totalSupplyBefore , "Checking upper bound in case of decrease of ratio";
+    //Implements (10) without division to avoid rounding.
+    assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets + 1) > (mintedAssets + newAssets), "Checking lower bound in case of decrease of ratio";
+}
+
+rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
+    env e;
+    uint256 mintedShares;
+    uint256 newAssets;
+    address user;
+    require(e.msg.sender == user);
+    require(e.msg.sender != currentContract);
+    require(newAssets > 0);
+
+    safeAssumptions();
+
+    //Mint some new shares
+    uint256 mintedAssets = mint(e, mintedShares, user);
+
+    //underlying vault increases value.
+    __ERC20.mint(e, currentContract, newAssets);
+    
+    //Redeem mintedShares again
+    uint256 redeemedAssets = redeem(e, mintedShares, user, user);
+
+    //Redeemed assets should have increased. TODO can we be more specific?
+    assert to_mathint(mintedAssets)  <= redeemedAssets + 1, "Redeemed assets must increase."; 
+}
 //`decimals()` should be larger than or equal to `asset.decimals()`
 rule decimalsOfUnderlyingVaultShouldBeLarger(uint256 shares, address receiver, address owner){
     //TODO: Rule fails. The method call to decimals returns a HAVOC'd value. Still the solver should be able to reason that ERC4626.decimals == ERC20.decimals as of the call to the super constructor. Don't understand why.
