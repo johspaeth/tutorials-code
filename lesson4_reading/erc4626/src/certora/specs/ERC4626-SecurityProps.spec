@@ -146,7 +146,7 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     //Implements (7) without division to avoid rounding.
     assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares < to_mathint(redeemedAssets + 1) * totalSupplyBefore, "Checking lower bound in case of increase of ratio"; //Causes timeout
     //Implements (8) without division to avoid rounding.
-    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets) <= (mintedAssets + newAssets), "Checking upper bound in case of increase of ratio"; //Causes timeout
+    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets) <= (mintedAssets + newAssets), "Checking upper bound in case of increase of ratio"; //Does not causes timeout with the correct config. https://prover.certora.com/output/53900/1c3ce153358048709a259f7ce383019c/?anonymousKey=ffd32ec358795cb4c1a1d006a98993335151ee23
     //Implements (9) without division to avoid rounding.
     assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares >= redeemedAssets * totalSupplyBefore , "Checking upper bound in case of decrease of ratio"; //Not a cause of the timeout, as identified by "multi_assert_check": true
     //Implements (10) without division to avoid rounding.
