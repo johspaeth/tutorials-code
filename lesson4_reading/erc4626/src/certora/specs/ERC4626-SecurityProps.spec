@@ -113,8 +113,8 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     //Note in the formular below, one can replace tAA / tSA by (tAB + mA + nA) / (tSB + mS)
     //Let tAB := totalAssetBefore
     //Let tAA := totalAssetAfter
-    //Let tSB := totalSupplyABefore
-    //Let tSA := totalSupplayAfter
+    //Let tSB := totalSupplyBefore
+    //Let tSA := totalSupplyAfter
     //Let mS := mintedShares
     //Let mA := mintedAssets
     //Let nA := newAssets

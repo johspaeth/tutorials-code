@@ -115,45 +115,41 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     //From.... totalAssetsBefore / totalSupplyBefore >= (mintedAssets + newAssets) / mintedShares ... implies ... mintedShares * totalAssetsBefore / totalSupplyBefore >= redeemedAssets >= (mintedAssets + newAssets) 
 
     
-    //Now it is mintedShares * totalAssetsAfter / totalSupplyAfter >= floor(mintedShares * totalAssetsAfter / totalSupplyAfter) [= redeemedAssets] > mintedShares * totalAssetsAfter / totalSupplyAfter - 1
+    //Now it is mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter * 10**decimals()) >= floor(mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter + 10**decimals()) [= redeemedAssets] > mintedShares * (totalAssetsAfter + 1) / (totalSupplyAfter + 10 ** decimals()) - 1
     
     //Note in the formular below, one can replace tAA / tSA by (tAB + mA + nA) / (tSB + mS)
-    //Let tAB := totalAssetBefore
-    //Let tAA := totalAssetAfter
-    //Let tSB := totalSupplyABefore
-    //Let tSA := totalSupplayAfter
+    //Let tAB := totalAssetsBefore
+    //Let tAA := totalAssetsAfter
+    //Let tSB := totalSupplyBefore
+    //Let tSA := totalSupplyAfter
     //Let mS := mintedShares
     //Let mA := mintedAssets
     //Let nA := newAssets
+    //Let d := decimals
     //Then it is
     //(1) tAB / tSB <= (mA + nA) / mS => tAB / tSB <= tAA / tSA 
     //(2): tAB / tSB <= (mA + nA) / mS => tAA / tSA <= (mA + nA) / mS 
     //(3): tAB / tSB >= (mA + nA) / mS => tAB / tSB >= tAA / tSA 
     //(4): tAB / tSB >= (mA + nA) / mS => tAA / tSA >= (mA + nA) / mS 
-    //we also know that (5) redeemedAssets <= mS * tAA / tSA  and (6) mS * tAA / tSA - 1 < redeemedAssets
+    //we also know that (5) redeemedAssets <= mS * (tAA + 1) / (tSA + 10**d)  and (6) mS * (tAA + 1) / (tSA + 10 ** d) - 1 < redeemedAssets
 
-    //Combining (1) and (6) it is
-    //(7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < (redeemedAssets + 1) / mS
-    //Combining (2) and (5) it is
-    //(8) tAB / tSB <= (mA + nA) / mS => redeemedAssets / mS <= (mA + nA) / mS 
-    //Combining (3) and (5) it is
-    //(9) tAB / tSB >= (mA + nA) / mS => tAB / tSB >= redeemedAssets / mS 
-    //Combining (4) and (6) it is
-    //(10) tAB / tSB >= (mA + nA) / mS => (redeemedAssets + 1) / mS > (mA + nA) / mS 
 
+    //(6) is equivalent to
+    //(6a) tAA < (redeemedAssets  * (tSA + 10 ** d)) / mS - 1
+    //Combining (1) and (6a) it is
+    //(7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < ((redeemedAssets  * (tSA + 10 ** d)) / mS - 1) / tSA
+    // which is equivalent to
+    //(7a) tAB / tSB <= (mA + nA) / mS => tAB / tSB < ((redeemedAssets  * (tSA + 10 ** d)) / (tSA * mS) - (1 / tSA)
+    //or (without division)
+    //(7b) tAB * mS  <= (mA + nA) * tSB => mS * tAB * tSA + mS * tSB < (redeemedAssets  * (tSA + 10 ** d)) * tSB
+    
 
     //Sanity asserts to ensure the reasoning is correct
     //assert to_mathint(totalAssetsAfter) == totalAssetsBefore + mintedAssets + newAssets;
     //assert to_mathint(totalSupplyAfter) == totalSupplyBefore + mintedShares;
 
-    //Implements (7) without division to avoid rounding.
-    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares < to_mathint(redeemedAssets + 1) * totalSupplyBefore, "Checking lower bound in case of increase of ratio";
-    //Implements (8) without division to avoid rounding.
-    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets) <= (mintedAssets + newAssets), "Checking upper bound in case of increase of ratio";
-    //Implements (9) without division to avoid rounding.
-    assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => totalAssetsBefore * mintedShares >= redeemedAssets * totalSupplyBefore , "Checking upper bound in case of decrease of ratio";
-    //Implements (10) without division to avoid rounding.
-    assert totalAssetsBefore * mintedShares >= (mintedAssets + newAssets) * totalSupplyBefore => to_mathint(redeemedAssets + 1) > (mintedAssets + newAssets), "Checking lower bound in case of decrease of ratio";
+    //Implements (7b)
+    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => mintedShares * totalAssetsBefore * totalSupplyAfter + mintedShares * totalSupplyBefore < redeemedAssets * (totalSupplyAfter + 1) * totalSupplyBefore, "Checking lower bound in case of increase of ratio";
 }
 
 rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
@@ -179,6 +175,7 @@ rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
     //Redeemed assets should have increased. TODO can we be more specific?
     assert to_mathint(mintedAssets)  <= redeemedAssets + 1, "Redeemed assets must increase."; 
 }
+
 //`decimals()` should be larger than or equal to `asset.decimals()`
 rule decimalsOfUnderlyingVaultShouldBeLarger(uint256 shares, address receiver, address owner){
     //TODO: Rule fails. The method call to decimals returns a HAVOC'd value. Still the solver should be able to reason that ERC4626.decimals == ERC20.decimals as of the call to the super constructor. Don't understand why.
