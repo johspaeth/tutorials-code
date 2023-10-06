@@ -104,6 +104,7 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
     uint256 redeemedAssets = redeem(e, mintedShares, user, user);
 
     /**
+    Explanation of the assert below. 
     Inequalities baisc idea: (a/c <= b/d) => (a/c <= (a + b)/(c + d) <= b/d)
 
 
