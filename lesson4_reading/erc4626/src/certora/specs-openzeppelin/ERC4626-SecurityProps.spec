@@ -135,21 +135,19 @@ rule increaseInUnderlyingVaultMustReflectToRedeemedShares_UpperLimit(){
 
 
     //(6) is equivalent to
-    //(6a) tAA < (redeemedAssets  * (tSA + 10 ** d)) / mS - 1
+    //(6a) tAA < ((redeemedAssets + 1) * (tSA + 10 ** d)) / mS - 1
     //Combining (1) and (6a) it is
-    //(7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < ((redeemedAssets  * (tSA + 10 ** d)) / mS - 1) / tSA
-    // which is equivalent to
-    //(7a) tAB / tSB <= (mA + nA) / mS => tAB / tSB < ((redeemedAssets  * (tSA + 10 ** d)) / (tSA * mS) - (1 / tSA)
+    //(7) tAB / tSB <= (mA + nA) / mS => tAB / tSB < (((redeemedAssets + 1)  * (tSA + 10 ** d)) / mS - 1) / tSA
     //or (without division)
-    //(7b) tAB * mS  <= (mA + nA) * tSB => mS * tAB * tSA + mS * tSB < (redeemedAssets  * (tSA + 10 ** d)) * tSB
+    //(7a) tAB * mS  <= (mA + nA) * tSB => mS * tAB * tSA + mS * tSB < ((redeemedAssets + 1)  * (tSA + 10 ** d)) * tSB
     
 
     //Sanity asserts to ensure the reasoning is correct
     //assert to_mathint(totalAssetsAfter) == totalAssetsBefore + mintedAssets + newAssets;
     //assert to_mathint(totalSupplyAfter) == totalSupplyBefore + mintedShares;
 
-    //Implements (7b)
-    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => mintedShares * totalAssetsBefore * totalSupplyAfter + mintedShares * totalSupplyBefore < redeemedAssets * (totalSupplyAfter + 1) * totalSupplyBefore, "Checking lower bound in case of increase of ratio";
+    //Implements (7a)
+    assert totalAssetsBefore * mintedShares <= (mintedAssets + newAssets) * totalSupplyBefore => mintedShares * totalAssetsBefore * totalSupplyAfter + mintedShares * totalSupplyBefore < (redeemedAssets + 1) * (totalSupplyAfter + 1) * totalSupplyBefore, "Checking lower bound in case of increase of ratio";
 }
 
 rule increaseInUnderlyingVaultMustReflectInRedeemNoTimeout_LowerLimit(){
