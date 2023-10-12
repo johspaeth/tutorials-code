@@ -1,18 +1,7 @@
 
-import "./ERC4626-MonotonicityInvariant.spec";
 
 //Had to change _ERC20 to ___ERC20 as of import that already declares __ERC20.
 using ERC20Mock as __ERC20;
-
-//This is counter-intuitive: why we need to import invariants that should be loaded when calling safeAssumptions()? 
-use invariant totalAssetsZeroImpliesTotalSupplyZero;
-use invariant sumOfBalancesEqualsTotalSupplyERC4626;
-use invariant sumOfBalancesEqualsTotalSupplyERC20;
-use invariant singleUserBalanceSmallerThanTotalSupplyERC20;
-use invariant singleUserBalanceSmallerThanTotalSupplyERC4626;
-use invariant mirrorIsCorrectERC20;
-use invariant mirrorIsCorrectERC4626;
-
 
 methods{
     function __ERC20.allowance(address,address) external returns uint256 envfree;
@@ -38,52 +27,34 @@ function mulDivSummary(uint256 x, uint256 y, uint256 denominator) returns uint25
 }
 
 
-rule simpleVersionOfInflationAttack(uint256 assets, address deposit_receiver, address redeem_receiver, address redeem_ownver) {
+rule simpleVersionOfInflationAttack(uint256 assets, address deposit_receiver, address redeem_receiver, address redeem_owner) {
     env e;
-    safeAssumptions();
     address attacker = e.msg.sender;
 
     require(balanceOf(attacker) == 0);
     require(balanceOf(deposit_receiver) == 0);
     require(balanceOf(redeem_receiver) == 0);
-    require(balanceOf(redeem_ownver) == 0);
+    require(balanceOf(redeem_owner) == 0);
 
     require(attacker != currentContract);
 
-    
     uint256 shares = deposit(e, assets, deposit_receiver);
-    uint256 receivedAssets = redeem(e, shares, redeem_receiver, redeem_ownver);
+    uint256 receivedAssets = redeem(e, shares, redeem_receiver, redeem_owner);
 
-    assert(receivedAssets <= assets);
+    assert receivedAssets <= assets, "The attacker gained assets.";
 }
 
-
-
 //Source: Medium Article by Shao https://tienshaoku.medium.com/eip-4626-inflation-sandwich-attack-deep-dive-and-how-to-solve-it-9e3e320cc3f1
-rule vulnerableToInflationAttack(address attacker, address victim, address deposit1_receiver, address deposit2_victim_receiver,address redeem_receiver,address redeem_ownver ){
+rule complexVersionOfInflationAttack(address attacker, address victim, address deposit1_receiver, address deposit2_victim_receiver,address redeem_receiver,address redeem_owner ){
+    uint256 amountToDeposit;
+    uint256 amountDirectTransferToUnderlying;
 
+    require(amountToDeposit > 0);
+    require(amountDirectTransferToUnderlying > 0);
 
-
-    //Doesn't work properly...Retry later.
-    /*requireInvariant sumOfBalancesEqualsTotalSupplyERC4626;
-    requireInvariant sumOfBalancesEqualsTotalSupplyERC20;
-    requireInvariant singleUserBalanceSmallerThanTotalSupplyERC4626;
-    requireInvariant singleUserBalanceSmallerThanTotalSupplyERC20;*/
-    //Doesn't work
-    //require forall address x. balanceOf(x) <= totalSupply();
-    //Doesn't work
-    //require forall address y. __ERC20.balanceOf(y) <= __ERC20.totalSupply();
-    safeAssumptions();
-    uint256 oneEther;
-    uint256 oneWei;
-
-    require(oneWei > 0);
-    require(oneEther > 0);
-
-    mathint assetsAttackerPreAttack = to_mathint(oneEther) + to_mathint(oneWei);
-    uint8 ERC4626decimals = decimals();
-    uint8 ERC20decimals = __ERC20.decimals();
-
+    mathint assetsAttackerPreAttack = to_mathint(amountToDeposit) + to_mathint(amountDirectTransferToUnderlying);
+    
+    //Excluding cases of counter example that are not of interest.
     require(attacker != currentContract);
     require(attacker != __ERC20);
     require(attacker != 0);
@@ -97,25 +68,25 @@ rule vulnerableToInflationAttack(address attacker, address victim, address depos
     require(totalAssets() == 0);
 
     //Duplicated all requireInvariants
-    //Doesn't work either....
     require(balanceOf(attacker) == 0);
     require(balanceOf(victim) == 0);
     require(balanceOf(deposit1_receiver) == 0);
     require(balanceOf(deposit2_victim_receiver) == 0);
     require(balanceOf(redeem_receiver) == 0);
-    require(balanceOf(redeem_ownver) == 0);
+    require(balanceOf(redeem_owner) == 0);
 
-    //These are fair assumptions on the addresses.
+    //These are fair assumptions on the addresses, the attacker can control these addresses
     require(attacker == deposit1_receiver);
-    require(attacker == redeem_ownver);
+    require(attacker == redeem_owner);
     require(attacker == redeem_receiver);
+
     //It is important that deposit2_victim_receiver is not equal to attacker, as otherwise the deposit by the victim has to transfer assets to the attacker. 
-    //This would mean the victim already trusts the attacker. Interstingly, we could find a CEX for this case.
+    //This would mean the victim already trusts the attacker. Interstingly, we could find a CEX for this case as well. 
     require(deposit2_victim_receiver != attacker);
 
-    require(balanceOf(attacker) + balanceOf(victim) + balanceOf(deposit1_receiver) +balanceOf(deposit2_victim_receiver) +balanceOf(redeem_receiver) + balanceOf(redeem_ownver) <= to_mathint(totalSupply()));
-    require(__ERC20.balanceOf(currentContract) + __ERC20.balanceOf(attacker) + __ERC20.balanceOf(victim) + __ERC20.balanceOf(deposit1_receiver) +__ERC20.balanceOf(deposit2_victim_receiver) +__ERC20.balanceOf(redeem_receiver) + __ERC20.balanceOf(redeem_ownver) <= to_mathint(__ERC20.totalSupply()));
-
+    //Manually ensuring sumOfBalances <= totalSupply() for underyling vault + ERC4626 vault
+    require(balanceOf(attacker) + balanceOf(victim) + balanceOf(deposit1_receiver) + balanceOf(deposit2_victim_receiver) + balanceOf(redeem_receiver) + balanceOf(redeem_owner) <= to_mathint(totalSupply()));
+    require(__ERC20.balanceOf(currentContract) + __ERC20.balanceOf(attacker) + __ERC20.balanceOf(victim) + __ERC20.balanceOf(deposit1_receiver) +__ERC20.balanceOf(deposit2_victim_receiver) +__ERC20.balanceOf(redeem_receiver) + __ERC20.balanceOf(redeem_owner) <= to_mathint(__ERC20.totalSupply()));
         
     uint256 before_step_1_totalSupply = totalSupply();
     uint256 before_step_1_totalAssets = totalAssets();
@@ -125,7 +96,7 @@ rule vulnerableToInflationAttack(address attacker, address victim, address depos
     */
     env e1;
     require(e1.msg.sender == attacker);
-    uint256 firstShares = deposit(e1, oneEther, deposit1_receiver);
+    uint256 firstShares = deposit(e1, amountToDeposit, deposit1_receiver);
     
     uint256 before_step_2_totalSupply = totalSupply();
     uint256 before_step_2_totalAssets = totalAssets();
@@ -134,19 +105,16 @@ rule vulnerableToInflationAttack(address attacker, address victim, address depos
     require(e2.msg.sender == attacker);
     require(e2.block.timestamp > e1.block.timestamp);
 
-    require(__ERC20.balanceOf(attacker) >= oneWei);
+    require(__ERC20.balanceOf(attacker) >= amountDirectTransferToUnderlying);
 
     /**
     * Step 2: the attacker also transfers 1 * 1e18 weiWETH, making the totalAssets() WETH balance of the vault become 1e18 + 1 wei
     */
-    __ERC20.transferFrom(e2, attacker, currentContract, oneWei);
+    __ERC20.transferFrom(e2, attacker, currentContract, amountDirectTransferToUnderlying);
     require(__ERC20.balanceOf(currentContract) > 0);
     
     uint256 before_step_3_totalSupply = totalSupply();
     uint256 before_step_3_totalAssets = totalAssets();
-
-    //assert before_step_3_totalSupply > 0;
-
     
     /** 
     * Step 3: 
@@ -156,8 +124,8 @@ rule vulnerableToInflationAttack(address attacker, address victim, address depos
     env e3;
     require(e3.msg.sender == victim);
     require(e3.block.timestamp > e2.block.timestamp);
-    uint256 previweAssets = previewDeposit(oneWei);
-    uint256 victimShares = deposit(e3, oneWei, deposit2_victim_receiver);
+    uint256 previweAssets = previewDeposit(amountDirectTransferToUnderlying);
+    uint256 victimShares = deposit(e3, amountDirectTransferToUnderlying, deposit2_victim_receiver);
     
     /**
     * Step 4: the attacker still has the 1 only share ever minted and thus the withdrawal of
@@ -166,12 +134,11 @@ rule vulnerableToInflationAttack(address attacker, address victim, address depos
     
     uint256 before_step_4_totalSupply = totalSupply();
     uint256 before_step_4_totalAssets = totalAssets();
-    uint256 random; 
+
     env e4;
     require(e4.msg.sender == attacker);
     require(e4.block.timestamp > e3.block.timestamp);
-    //TODO: can attacker actually withdraw `convertToAssets(before_step_4_totalSupply)` or only `assetsAttackerPreAttack`
-    mathint assetsAttackerPostAttack = redeem(e4, before_step_4_totalSupply, redeem_receiver, redeem_ownver);
+    mathint assetsAttackerPostAttack = redeem(e4, before_step_4_totalSupply, redeem_receiver, redeem_owner);
 
     uint256 finalTotalAssets = totalAssets();
     uint256 finalTotalSupply = totalSupply();

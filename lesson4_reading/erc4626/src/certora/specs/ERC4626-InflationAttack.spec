@@ -62,8 +62,8 @@ rule vulnerableToInflationAttack(address attacker, address victim, address depos
     uint256 amountToDeposit;
     uint256 amountDirectTransferToUnderlying;
 
-    require(amountToDeposit > 0);
-    require(amountDirectTransferToUnderlying > 0);
+    require(amountToDeposit == 1);
+    require(amountDirectTransferToUnderlying == 10^18);
 
     mathint assetsAttackerPreAttack = to_mathint(amountToDeposit) + to_mathint(amountDirectTransferToUnderlying);
     uint8 ERC4626decimals = decimals();
